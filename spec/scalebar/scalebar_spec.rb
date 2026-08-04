@@ -185,7 +185,7 @@ EOF
 
 		it "generate tex" do
 			cui.run
-			expect(File.exists?(tex_path)).to be_truthy
+			expect(File.exist?(tex_path)).to be_truthy
 		end
 
 
@@ -211,7 +211,7 @@ EOF
 
 		it "generate tex with grid" do
 			cui.run
-			expect(File.exists?(tex_path)).to be_truthy
+			expect(File.exist?(tex_path)).to be_truthy
 			expect(File.open(tex_path).read).to match(/Grids of \|\S+\| micro meter pitch are drawn\./)
 			expect(File.open(tex_path).read).to match(/multiput/)
 		end
@@ -236,7 +236,7 @@ EOF
 
 		it "generate tex without grid" do
 			cui.run
-			expect(File.exists?(tex_path)).to be_truthy
+			expect(File.exist?(tex_path)).to be_truthy
 			expect(File.open(tex_path).read).not_to match(/Grids of \|\S+\| micro meter pitch are drawn\./)
 			expect(File.open(tex_path).read).not_to match(/multiput/)
 		end

@@ -39,7 +39,7 @@ module Scalebar
 	  end
 
 	  def cmd_options(argv=ARGV)
-	    Trollop::options(argv) do
+	    Optimist::options(argv) do
 	        # banner "  Usage: scalebar imagefile"
 	      banner  <<"EOS"
 NAME
@@ -244,7 +244,7 @@ EOS
 	  end
 
 	  def parse_option
-	    Trollop::die "invalid args" if argv.size < 1
+	    Optimist::die "invalid args" if argv.size < 1
 	    @image_path = argv.shift
 	    @dirname = File.dirname(@image_path)
 	    @basename = File.basename(@image_path, ".*")
@@ -276,7 +276,7 @@ EOS
 
 	  def run
 	    parse_option
-	    if File.exists?(output_path)
+	    if File.exist?(output_path)
 	      STDERR.puts "|#{output_path}| already exists."
 	    else
 	      generate_tex(params[:grid])

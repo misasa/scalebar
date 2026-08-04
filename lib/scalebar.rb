@@ -1,4 +1,4 @@
 require "scalebar/version"
 require "scalebar/scalebar"
-require 'trollop'
+require 'optimist'
 require 'dimensions'

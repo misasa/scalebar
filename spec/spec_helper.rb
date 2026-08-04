@@ -1,3 +1,5 @@
+require 'fileutils'
+
 #require 'scalebar'
 class Output
   def messages

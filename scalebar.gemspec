@@ -22,6 +22,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake", ">= 12.3.3"
   spec.add_development_dependency "rspec", "~> 3.1"  
 
-  spec.add_dependency "trollop", "~> 2.1"
+  spec.add_dependency "optimist", "~> 3.0"
   spec.add_dependency "dimensions", "~> 1.3"  
 end

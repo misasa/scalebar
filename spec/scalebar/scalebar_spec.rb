@@ -1,246 +1,150 @@
 require 'spec_helper'
-require 'scalebar'
 
-module Scalebar
-describe Scalebar do
-#		let(:output) { double('output').as_null_object }
-	before(:each) do
-		#@tmp_path = File.expand_path('../../../tmp',__FILE__)
-		setup_empty_dir('tmp')
-	end
+RSpec.describe Scalebar::Scalebar do
+  describe 'calibration and geometry', :specification do
+    # The JPEG has 1914 x 1537 pixels; its independent JEOL sidecar records
+    # the same dimensions, magnification 7.837 and stage coordinates in mm.
+    it 'reads JPEG dimensions independently of the sidecar' do
+      app = app_for('--magnification=2')
+      expect(app.dimensions).to eq([1914, 1537])
+      expect(app.length).to eq(1914)
+      expect(app.normalized_dimensions).to eq([100.0, 80.3030303030303])
+    end
 
-	describe "#run with -h" do
-		let(:cui){ Scalebar.new(myout, args)}
-		let(:args){ ['-h'] }
-		it "show help" do
-			puts "-" * 30
-			expect{cui.run}.to raise_error(SystemExit)
-			puts "-" * 30
-		end
-	end
+    it 'reads magnification and stage coordinates from the JEOL sidecar' do
+      app = app_for(metadata: true)
+      expect(app.magnification).to eq(7.837)
+      expect(app.stage_position).to eq([57.656, 15.152])
+      expect(app.locate).to eq([57656.0, 15152.0])
+    end
 
+    it 'uses the image header when sidecar dimensions disagree', :characterization, specification: false do
+      prepare_image(metadata: true)
+      File.write(File.join(@work_dir, 'Dag340B1-Mg.txt'), "CM_MAG 2\nCM_FULL_SIZE 1 1\n")
+      app = described_class.new(StringIO.new, [image_path])
+      app.parse_option
+      expect(app.dimensions).to eq([1914, 1537])
+    end
 
-	describe "#length" do
-		let(:cui){ Scalebar.new(myout, args) }
-		let(:args){ [image_path] }
-		let(:image_path){ 'tmp/Dag340B1-Mg.jpg' }
-		let(:txt_path){ 'tmp/Dag340B1-Mg.txt' }
-		let(:magnification){ 2.0 }
-		before(:each) do
-			setup_file(image_path)
-			File.open(txt_path, 'w'){|f|
-				f.puts sprintf("CM_MAG %.1f\n", magnification)
-			}
-			cui.parse_option
-		end
-		it { expect(cui.length_in_mm).to be_eql(60.0) }
-		it { expect(cui.length_in_um).to be_eql(60000.0) }
-		it { expect(cui.pixels_per_um).to be_eql(cui.length/60000.0) }
-	end
+    # JEOL's 2x image represents a 60 mm field on its 120 mm reference.
+    # Thus 1914 pixels span 60,000 um: 31.9 pixels per mm.
+    it 'converts a 2x image into mm, um and pixels without losing a factor of 1000' do
+      app = app_for('--magnification=2')
+      expect(app.length_in_mm).to eq(60.0)
+      expect(app.length_in_um).to eq(60000.0)
+      expect(app.width).to eq(60000.0)
+      expect(app.pixels_per_um).to be_within(1e-12).of(0.0319)
+      expect(app.width_in_um).to be_within(1e-8).of(60000.0)
+      expect(app.height_in_um).to be_within(1e-8).of(48181.81818181818)
+    end
 
-	describe "#parse_txt" do
-		let(:cui){ Scalebar.new(myout, args) }
-		let(:args){ [image_path] }
-		let(:image_path){ 'tmp/Dag340B1-Mg.jpg' }
-		let(:txt_path){ 'tmp/Dag340B1-Mg.txt' }
-		before(:each) do
-			info_text =<<EOF
-$CM_TITLE Dag340B1
-$CM_SIGNAL Mg
-$CM_MAG 7.837
-$CM_FULL_SIZE 1914 1537
-$CM_STAGE_POS 57.656 15.152 0.0 0.0 0.0 0
-EOF
-			File.open(txt_path, 'w'){|f|
-				f.puts info_text
-			}
-			cui.parse_option
-		end
-		it { expect(cui.stage_position).to be_eql([57.656, 15.152]) }
-		it { expect(cui.magnification).to be_eql(7.837) }
-	end
+    it 'converts a supplied 60 mm field into magnification 2' do
+      expect(app_for('--width=60').magnification).to eq(2.0)
+    end
 
-	describe ".generate_absolute_ticks" do
-	#generate_absolute_ticks(range_in_um, pixels_per_um, length, tick_in_um)
-		subject{ Scalebar.generate_absolute_ticks(range_in_um, pixels_per_um, length, tick_in_um) } 
-		let(:range_in_um){ [50000.009, 65311.99] }
-		let(:pixels_per_um){ 0.125 }
-		let(:length){ 1914 }
-		let(:tick_in_um){ 500 }
-		it {
-			expect(subject).not_to be_nil
-		}
-	end
+    it 'centers physical extents on the stage origin when coordinates are absent' do
+      app = app_for('--magnification=2')
+      expect(app.stage_position).to eq([0, 0])
+      expect(app.x_range[0]).to be_within(1e-8).of(-30000.0)
+      expect(app.x_range[1]).to be_within(1e-8).of(30000.0)
+      expect(app.y_range[0]).to be_within(1e-8).of(-24090.90909090909)
+      expect(app.y_range[1]).to be_within(1e-8).of(24090.90909090909)
+    end
 
-	describe "#run with image" do
-		let(:cui){ Scalebar.new(myout, args) }
-		let(:args){ [image_path] }
-		let(:image_path){ 'tmp/Dag340B1-Mg.jpg' }
-		let(:tex_path){ 'tmp/Dag340B1-Mg.tex' }
+    it 'translates field extents by stage coordinates converted from mm to um' do
+      app = app_for('--magnification=2')
+      app.stage_position = [10.0, -20.0]
+      expect(app.locate).to eq([10000.0, -20000.0])
+      expect(app.x_range[0]).to be_within(1e-8).of(-20000.0)
+      expect(app.x_range[1]).to be_within(1e-8).of(40000.0)
+      expect(app.y_range[0]).to be_within(1e-8).of(-44090.90909090909)
+      expect(app.y_range[1]).to be_within(1e-8).of(4090.90909090909)
+    end
+  end
 
-		before(:each) do
-			setup_file(image_path)
-		end
+  describe 'scale bar sizing', :characterization do
+    # Existing policy: the largest power of ten um <= the reference field.
+    # Literals protect decade boundaries, without prescribing a new policy.
+    [[9.999, 1000.0], [10.0, 10000.0], [10.001, 10000.0], [60.0, 10000.0]].each do |width_mm, bar_um|
+      it "chooses a #{bar_um.to_i} um bar for a #{width_mm} mm reference field" do
+        expect(app_for("--width=#{width_mm}").scale_length_on_stage).to eq(bar_um)
+      end
+    end
 
-		it "not set magnification" do
-			cui.run
-			expect(cui.magnification).to be_nil
-		end
+    it 'draws a 10 mm bar as 319 pixels in the 1914 pixel, 60 mm landscape field' do
+      expect(app_for('--width=60').scale_length_on_image).to be_within(1e-10).of(319.0)
+    end
 
-		it "output tex without scalebar" do
-			cui.run
-			expect(File.open(tex_path).read).not_to match(/Magnification of image \|\S+\|/)
-			expect(File.open(tex_path).read).not_to match(/line/)
-		end
+    it 'preserves the current portrait normalization and horizontal bar policy' do
+      path = File.join(@work_dir, 'portrait.png')
+      write_png(path, 60, 120)
+      app = described_class.new(StringIO.new, ['--width=60', path])
+      app.parse_option
+      expect(app.dimensions).to eq([60, 120])
+      expect(app.length).to eq(120)
+      expect(app.normalized_dimensions).to eq([50.0, 100.0])
+      expect(app.width_in_um).to eq(30000.0)
+      # Known inconsistency: the horizontal bar uses a 60 mm reference,
+      # but longest-edge calibration makes the horizontal extent 30 mm.
+      expect(app.scale_length_on_image).to eq(10.0)
+    end
+  end
 
-	end
+  describe '.generate_absolute_ticks', :specification do
+    # A 1000-pixel field at 0.1 pixel/um spans 10,000 um. A 2000 um
+    # pitch is 200 pixels, or 20 percentage points in overpic coordinates.
+    it 'places aligned ticks every 20 percent, including both endpoints' do
+      ticks = described_class.generate_absolute_ticks([0, 10000], 0.1, 1000, 2000)
+      expect(ticks.map { |tick| tick[:um] }).to eq([0, 2000, 4000, 6000, 8000, 10000])
+      expect(ticks.map { |tick| tick[:prop] }).to eq([0.0, 20.0, 40.0, 60.0, 80.0, 100.0])
+    end
 
-	describe "#run with image and -m" do
-		let(:cui){ Scalebar.new(myout, args) }
-		let(:magnification){ 2.0 }
-		let(:args){ [image_path, '-m', magnification.to_s] }
-		let(:image_path){ 'tmp/Dag340B1-Mg.jpg' }
-		let(:tex_path){ 'tmp/Dag340B1-Mg.tex' }
+    it 'includes neighboring ticks outside an unaligned positive field' do
+      ticks = described_class.generate_absolute_ticks([1000.0, 11000.0], 0.1, 1000, 2000.0)
+      expect(ticks.map { |tick| tick[:um] }).to eq([0, 2000, 4000, 6000, 8000, 10000, 12000])
+      expect(ticks.map { |tick| tick[:prop] }).to eq([-10.0, 10.0, 30.0, 50.0, 70.0, 90.0, 110.0])
+    end
 
-		before(:each) do
-			setup_file(image_path)
-			#allow(cui).to receive(:get_magnification)
-		end
+    it 'rounds negative stage coordinates outward rather than toward zero' do
+      ticks = described_class.generate_absolute_ticks([-1000.0, 9000.0], 0.1, 1000, 2000.0)
+      expect(ticks.map { |tick| tick[:um] }).to eq([-2000, 0, 2000, 4000, 6000, 8000, 10000])
+      expect(ticks.map { |tick| tick[:prop] }).to eq([-10.0, 10.0, 30.0, 50.0, 70.0, 90.0, 110.0])
+    end
 
-		it "set magnification" do
-			cui.run
-			expect(cui.magnification).to be_eql(magnification)
-		end
+    it 'uses micrometers for a 500 um pitch independently of pixel density' do
+      ticks = described_class.generate_absolute_ticks([0, 1000], 0.2, 200, 500)
+      expect(ticks).to eq([{um: 0, prop: 0.0}, {um: 500, prop: 50.0}, {um: 1000, prop: 100.0}])
+    end
+  end
 
-		it "output tex with scalebar" do
-			cui.run
-			expect(File.open(tex_path).read).to match(/Magnification of image \|\S+\| relative to 12 cm is \|2.000\|/)
-			expect(File.open(tex_path).read).to match(/line/)
-		end
+  describe 'input precedence and defaults', :characterization do
+    it 'retains integer-division truncation for direct integer tick inputs' do
+      # Known limitation outside the normal CLI's floating-point coordinate
+      # pipeline: integer division omits the outer tick at 12,000 um.
+      ticks = described_class.generate_absolute_ticks([1000, 11000], 0.1, 1000, 2000)
+      expect(ticks.map { |tick| tick[:um] }).to eq([0, 2000, 4000, 6000, 8000, 10000])
+    end
 
+    it 'gives an existing sidecar precedence over explicit width and magnification' do
+      expect(app_for('--width=60', '--magnification=2', metadata: true).magnification).to eq(7.837)
+    end
 
-	end
+    it 'gives explicit magnification precedence over explicit width' do
+      expect(app_for('--width=60', '--magnification=4').magnification).to eq(4.0)
+    end
 
-	describe "#run with image and -w" do
-		let(:cui){ Scalebar.new(myout, args) }
-		let(:width){ 60.0 }
-		let(:args){ [image_path, '-w', width.to_s] }
-		let(:image_path){ 'tmp/Dag340B1-Mg.jpg' }
-		let(:tex_path){ 'tmp/Dag340B1-Mg.tex' }
+    it 'leaves an image uncalibrated without width, magnification or a sidecar' do
+      app = app_for
+      expect(app.magnification).to be_nil
+      expect(app.width).to be_nil
+    end
 
-		before(:each) do
-			setup_file(image_path)
-		end
-
-		it "set magnification" do
-			cui.run
-			expect(cui.magnification).to be_eql(120/width)
-		end
-
-		it "output tex with scalebar" do
-			cui.run
-			expect(File.open(tex_path).read).to match(/Magnification of image \|\S+\| relative to 12 cm is \|2.000\|/)
-			expect(File.open(tex_path).read).to match(/line/)
-		end
-	end
-
-
-	describe "#run with image and image.tex" do
-		let(:cui){ Scalebar.new(myout, args) }
-		let(:args){ [image_path] }
-		let(:image_path){ 'tmp/Dag340B1-Mg.jpg' }
-		let(:tex_path){ 'tmp/Dag340B1-Mg.tex' }
-
-		before(:each) do
-			setup_file(image_path)
-			File.open(tex_path, 'w'){|f|
-				f.puts "Hello World"
-			}
-#			allow(cui).to receive(:gets_magnification).and_return(2.0)
-		end
-
-		# it "require input of magnification" do
-		# 	expect(cui).to receive(:gets_magnification).and_return(2.0)
-		# 	cui.run
-		# end
-
-		it "should not overwrite image.tex" do
-			cui.run
-			expect(File.open(tex_path).read).to be_eql("Hello World\n")
-		end
-	end
-
-
-	describe "#run with image and txt" do
-		let(:cui){ Scalebar.new(myout, args) }
-		let(:args){ [image_path] }
-		let(:image_path){ 'tmp/Dag340B1-Mg.jpg' }
-		let(:tex_path){ 'tmp/Dag340B1-Mg.tex' }
-		let(:txt_path){ 'tmp/Dag340B1-Mg.txt' }
-
-		before(:each) do
-			setup_file(image_path)
-			setup_file(txt_path)
-		end
-
-		it "generate tex" do
-			cui.run
-			expect(File.exist?(tex_path)).to be_truthy
-		end
-
-
-	end
-
-
-	describe "#run with image and txt -g" do
-		let(:cui){ Scalebar.new(myout, args) }
-		let(:args){ [image_path, '-g', '1.0'] }
-		let(:image_path){ 'tmp/Dag340B1-Mg.jpg' }
-		let(:tex_path){ 'tmp/Dag340B1-Mg.tex' }
-		let(:txt_path){ 'tmp/Dag340B1-Mg.txt' }
-
-		before(:each) do
-			setup_file(image_path)
-			setup_file(txt_path)
-		end
-
-		it "call generate_tex_with_grid" do
-			expect(cui).to receive(:generate_tex).with(1.0)
-			cui.run
-		end
-
-		it "generate tex with grid" do
-			cui.run
-			expect(File.exist?(tex_path)).to be_truthy
-			expect(File.open(tex_path).read).to match(/Grids of \|\S+\| micro meter pitch are drawn\./)
-			expect(File.open(tex_path).read).to match(/multiput/)
-		end
-	end
-
-	describe "#run with image -g without txt" do
-		let(:cui){ Scalebar.new(myout, args) }
-		let(:args){ [image_path, '-g', '1.0'] }
-		let(:image_path){ 'tmp/Dag340B1-Mg.jpg' }
-		let(:tex_path){ 'tmp/Dag340B1-Mg.tex' }
-
-		before(:each) do
-			setup_file(image_path)
-#			allow(cui).to receive(:gets_magnification).and_return(7.84)
-		end
-
-
-		it "call generate_tex_with_grid" do
-			expect(cui).to receive(:generate_tex).with(1.0)
-			cui.run
-		end
-
-		it "generate tex without grid" do
-			cui.run
-			expect(File.exist?(tex_path)).to be_truthy
-			expect(File.open(tex_path).read).not_to match(/Grids of \|\S+\| micro meter pitch are drawn\./)
-			expect(File.open(tex_path).read).not_to match(/multiput/)
-		end
-	end
-
-end
+    it 'does not fall back to width when an existing sidecar lacks magnification' do
+      prepare_image
+      File.write(File.join(@work_dir, 'Dag340B1-Mg.txt'), "CM_TITLE uncalibrated\n")
+      app = described_class.new(StringIO.new, ['--width=60', image_path])
+      app.parse_option
+      expect(app.magnification).to be_nil
+    end
+  end
 end

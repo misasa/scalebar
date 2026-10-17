@@ -43,71 +43,56 @@ module Scalebar
 	        # banner "  Usage: scalebar imagefile"
 	      banner  <<"EOS"
 NAME
-  #{File.basename($0, '.*')} - Put scalebar on image
+  #{File.basename($0, '.*')} - Generate LaTeX scale bars and grids for images
 
 SYNOPSIS
   #{File.basename($0, '.*')} [options] imagefile
 
-HISTORY
-  June 14, 2016: Document revised by TK
-  April 24, 2015: Add grid capability by YY
-  April 23, 2015: Add online documentation by TK
-  April 10, 2015: Rename scalebar as #{File.basename($0, '.*')} by MY
-
 DESCRIPTION
-  Put scalebar on image.  Create a LaTeX file that includes
-  scale bar or scale grids with indexes.
+  Write a LaTeX image overlay to imagefile.tex beside the input image.
+  The original image is not modified. An existing .tex file is never
+  overwritten; rename or remove it before generating a replacement.
 
-  On launch, this program looks for `imagefile.txt', which is
-  image-property file created by JEOL JSM-7001F, that is often
-  referred as an imajeoletry file.  Based on the information, a LaTeX
-  file that includes the image file with scale bar is created.  In a
-  case where no `imagefile.txt' was found, feed width of image by
-  yourself.
+  The program first reads a JEOL JSM-7001F sidecar with the same base
+  name (for example, sample.jpg and sample.txt). An existing sidecar
+  takes precedence over command-line calibration. Without a sidecar,
+  use --magnification or --width; magnification takes precedence.
 
-EXAMPLE
-  $ ls
-  Suiton.png Suiton.txt
-  $ image-scalebar --grid=1 Suiton.png
-  writing |./Suiton.tex|...
-  $ ls
-  Suiton.png Suiton.txt Suiton.tex
+  With no calibration, the output contains the image and annotations
+  but no scale bar or grid. --grid specifies the pitch in millimeters
+  and requires calibration. Generated scale comments use micrometers.
 
-TIPS
-  When you want to utilize imageometry, call `spots-warp'.  Create
-  stagelist.txt and estimate width of an image.  The detail steps are
-  shown below.  Note that this only works when edge of x is longer
-  than edge of y.
+  The output is a LaTeX fragment, not a PDF or a standalone document.
+  Include it in a document providing overpic, color, pict2e and URL
+  support, and definitions of the existing sublabel/subref commands.
 
-  CMD> dir
-  mnt-NM-61.jpg   mnt-NM-61.geo
-  mnt-NM-61_.jpg  mnt-NM-61_.geo  stagelist.txt
-  CMD> type stagelist.txt
-  Class	Name	X-Locate	Y-Locate	Data
-  0	x=-50	-50	0
-  0	x=+50	50	0
-  CMD> spots-warp stagelist.txt -a mnt-NM-61_.geo
-  Class	Name	X-Locate	Y-Locate	Data
-  0	x=-50	-6709.499	512.209
-  0	x=+50	17471.030	512.209
-  R> (17471.030-(-6709.499))/1000
-  [1] 24.18053
-  CMD> image-scalebar --width 24.18053 --grid=1 mnt-NM-61_.jpg
-  writing to |./mnt-NM-61_.tex|...
-
-SEE ALSO
-  spots0
-  spots.m
-  spots-warp in gem package -- multi_stage <https://gitlab.misasa.okayama-u.ac.jp/gems/multi_stage>
-  https://github.com/misasa/scalebar
-  https://github.com/misasa/scalebar/blob/master/bin/image-scalebar
+EXAMPLES
+  image-scalebar sample.jpg
+  image-scalebar --width=60 sample.jpg
+  image-scalebar --magnification=2 sample.jpg
+  image-scalebar --width=60 --grid=1 sample.jpg
 
 TECHNICAL NOTE
-  JEOL defines magnification relative to 12 cm width.
+  JEOL defines magnification relative to a 120 mm reference length.
+  Use landscape images for field-width calibration; portrait scale
+  behavior is a known limitation. Width and grid pitch are in mm.
+  Positive calibration values and a positive grid pitch are required
+  for meaningful output; invalid numerical ranges are not validated.
+
+HISTORY
+  June 14, 2016: Documentation revised by TK
+  April 24, 2015: Grid support added by YY
+  April 23, 2015: Command-line documentation added by TK
+  April 10, 2015: Renamed scalebar to #{File.basename($0, '.*')} by MY
+
+SEE ALSO
+  https://github.com/misasa/scalebar
+  spots-warp in the multi_stage gem:
+  https://gitlab.misasa.okayama-u.ac.jp/gems/multi_stage
 
 IMPLEMENTATION
   Copyright (C) 2013-2020 Okayama University
-  License GPLv3+: GNU GPL version 3 or later
+  License: GPL-3.0-or-later
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -118,9 +103,9 @@ OPTIONS
 EOS
 	#  -g, --grid=<pitch>         Impose grid with pitch in mm (not implemented)
 	  #      opt :output, "Specify output filename", :type => :string
-	      opt :magnification, "Specify magnification", :type => :float
-	      opt :width, "Specify width in mm", :type => :float
-	      opt :grid, "Impose grid with pitch in mm", :type => :float
+	      opt :magnification, "JEOL magnification relative to 120 mm", :type => :float
+	      opt :width, "Reference field width in mm (landscape images)", :type => :float
+	      opt :grid, "Grid pitch in mm (requires calibration)", :type => :float
 	  #      opt :yes, "Answer yes for all questions", :type => :boolean
 	    end
 	  end

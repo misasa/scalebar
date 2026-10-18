@@ -1,36 +1,47 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-# This workflow will download a prebuilt Ruby version, install dependencies and run tests with Rake
-# For more information see: https://github.com/marketplace/actions/setup-ruby-jruby-and-truffleruby
-
 name: Ruby
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
+
+permissions:
+  contents: read
 
 jobs:
   test:
-
-    runs-on: ubuntu-latest
+    name: Ruby ${{ matrix.ruby }}
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        ruby: [ '2.5', '2.6', '2.7' ]
+        include:
+          - ruby: '2.6.10'
+            bundler: '2.4.22'
+            rubygems: '3.4.22'
+          - ruby: '4.0.7'
+            bundler: '4.0.20'
+            rubygems: '4.0.20'
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Ruby
-    # To automatically get bug fixes and new Ruby versions for ruby/setup-ruby,
-    # change this to (see https://github.com/ruby/setup-ruby#versioning):
-    # uses: ruby/setup-ruby@v1
-      uses: ruby/setup-ruby@21351ecc0a7c196081abca5dc55b08f085efe09a
-      with:
-        ruby-version: ${{ matrix.ruby }}
-    - name: Install dependencies
-      run: bundle install
-    - name: Run tests
-      run: bundle exec rspec
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      # Current ruby-builder releases provide 2.6.10 for Ubuntu 24.04 x64.
+      # Bundler 2.4 / RubyGems 3.4 are the compatible lines for Ruby 2.6.
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler: ${{ matrix.bundler }}
+          rubygems: ${{ matrix.rubygems }}
+          bundler-cache: true
+      - name: Report the selected environment
+        run: |
+          command -v ruby
+          ruby -v
+          gem --version
+          bundle --version
+      - name: Verify specs, gem build and installed CLI
+        run: bundle exec rake verify
+      - name: Check RubyGems build warnings
+        run: gem build scalebar.gemspec --strict --output pkg/scalebar-strict.gem

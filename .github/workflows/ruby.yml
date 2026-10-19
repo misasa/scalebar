@@ -45,3 +45,35 @@ jobs:
         run: bundle exec rake verify
       - name: Check RubyGems build warnings
         run: gem build scalebar.gemspec --strict --output pkg/scalebar-strict.gem
+
+  package:
+    name: Store verified gem
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0.7'
+          bundler: '4.0.20'
+          rubygems: '4.0.20'
+          bundler-cache: true
+      # Rebuild and verify this commit after both matrix jobs have passed.
+      - name: Verify specs, gem build and installed CLI
+        run: bundle exec rake verify
+      - name: Select the verified gem
+        id: package
+        run: |
+          gem_path="$(ruby -e 'puts "pkg/#{Gem::Specification.load("scalebar.gemspec").file_name}"')"
+          printf 'path=%s\n' "$gem_path" >> "$GITHUB_OUTPUT"
+          printf 'Commit: `%s`\nGem: `%s`\n' "$GITHUB_SHA" "$gem_path" >> "$GITHUB_STEP_SUMMARY"
+      # Artifact metadata links its unique ID to this workflow run and head SHA.
+      - name: Upload the verified gem
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: scalebar-gem
+          path: ${{ steps.package.outputs.path }}
+          if-no-files-found: error

@@ -178,13 +178,3 @@ These are existing limitations, not Ruby 4 regressions. The characterization
 suite intentionally preserves them where stable and useful; the untested
 policies above are not claims of correctness. Unit labels, grid redesign and
 functional refactoring remain outside this maintenance change.
-
-## License history
-
-The initial 2015 license was MIT. Commit `9ddad61` by Yusuke Yachi on
-2017-05-23 changed LICENSE.txt to GPLv3-or-later and the existing Okayama
-University notice. Subsequent CLI help also states GPLv3-or-later. The gemspec's
-MIT field was never updated. This change aligns package metadata and English
-help with that recorded maintainer choice; it preserves both existing copyright
-notices and appends the [official GPLv3 text](https://www.gnu.org/licenses/gpl-3.0.txt)
-to LICENSE.txt. It does not change third-party dependencies' licenses.

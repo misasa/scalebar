@@ -14,4 +14,11 @@ RSpec.describe 'gem metadata' do
     expect(specification.homepage).to eq('https://github.com/misasa/scalebar')
     expect(specification.licenses).to eq(['GPL-3.0-or-later'])
   end
+
+  it 'packages only runtime code and user-facing documentation' do
+    expect(specification.files.sort).to eq(%w[
+      LICENSE.txt README.md bin/image-scalebar lib/scalebar.rb
+      lib/scalebar/scalebar.rb lib/scalebar/version.rb
+    ])
+  end
 end

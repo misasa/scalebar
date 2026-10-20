@@ -3,6 +3,7 @@ name: Ruby
 on:
   push:
     branches: [master]
+    tags: ['v*']
   pull_request:
     branches: [master]
 
@@ -41,19 +42,29 @@ jobs:
           ruby -v
           gem --version
           bundle --version
-      - name: Verify specs, gem build and installed CLI
-        run: bundle exec rake verify
-      - name: Check RubyGems build warnings
-        run: gem build scalebar.gemspec --strict --output pkg/scalebar-strict.gem
+      - name: Run tests
+        run: bundle exec rake spec
+      - name: Check download script syntax
+        run: bash -n script/download_release.sh
 
-  package:
-    name: Store verified gem
+  release:
+    name: Publish verified gem
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: scalebar-release-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v6
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: ruby/setup-ruby@v1
         with:
@@ -61,19 +72,47 @@ jobs:
           bundler: '4.0.20'
           rubygems: '4.0.20'
           bundler-cache: true
-      # Rebuild and verify this commit after both matrix jobs have passed.
-      - name: Verify specs, gem build and installed CLI
-        run: bundle exec rake verify
-      - name: Select the verified gem
+      - name: Check master ancestry, tag, version and existing releases
         id: package
         run: |
-          gem_path="$(ruby -e 'puts "pkg/#{Gem::Specification.load("scalebar.gemspec").file_name}"')"
-          printf 'path=%s\n' "$gem_path" >> "$GITHUB_OUTPUT"
-          printf 'Commit: `%s`\nGem: `%s`\n' "$GITHUB_SHA" "$gem_path" >> "$GITHUB_STEP_SUMMARY"
-      # Artifact metadata links its unique ID to this workflow run and head SHA.
-      - name: Upload the verified gem
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: scalebar-gem
-          path: ${{ steps.package.outputs.path }}
-          if-no-files-found: error
+          set -euo pipefail
+          git fetch origin '+refs/heads/master:refs/remotes/origin/master' --tags
+          gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          filename="$(ruby script/verify_release.rb "$RELEASE_TAG" "$GITHUB_SHA" "$RUNNER_TEMP/releases.json")"
+          printf 'filename=%s\n' "$filename" >> "$GITHUB_OUTPUT"
+      - name: Build and verify the release archive
+        env:
+          GEM_FILENAME: ${{ steps.package.outputs.filename }}
+        run: |
+          set -euo pipefail
+          mkdir -p pkg
+          gem build scalebar.gemspec --strict --output "pkg/$GEM_FILENAME"
+          bundle exec ruby script/verify_package.rb "pkg/$GEM_FILENAME"
+          ruby -rrubygems/package -e '
+            path = ARGV.fetch(0)
+            spec = Gem::Package.new(path).spec
+            abort "Archive filename mismatch" unless File.basename(path) == spec.file_name
+            abort "Archive tag mismatch" unless ENV.fetch("RELEASE_TAG") == "v#{spec.version}"
+          ' "pkg/$GEM_FILENAME"
+          (cd pkg && sha256sum "$GEM_FILENAME" > "$GEM_FILENAME.sha256")
+      - name: Upload draft, verify uploaded bytes, then publish
+        env:
+          GEM_FILENAME: ${{ steps.package.outputs.filename }}
+        run: |
+          set -euo pipefail
+          # Recheck immediately before creating anything. API failures stop the job.
+          gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          ruby script/verify_release.rb "$RELEASE_TAG" "$GITHUB_SHA" "$RUNNER_TEMP/releases.json"
+          gh release create "$RELEASE_TAG" \
+            "pkg/$GEM_FILENAME" "pkg/$GEM_FILENAME.sha256" \
+            --verify-tag --draft --title "$RELEASE_TAG" \
+            --notes "Verified on Ruby 2.6.10 and 4.0.7. Download the gem and its SHA-256 checksum below."
+          # A failure leaves an unpublished draft for inspection, never a partial public release.
+          uploaded="$(mktemp -d)"
+          gh release download "$RELEASE_TAG" --dir "$uploaded" \
+            --pattern "$GEM_FILENAME" --pattern "$GEM_FILENAME.sha256"
+          cmp "pkg/$GEM_FILENAME" "$uploaded/$GEM_FILENAME"
+          cmp "pkg/$GEM_FILENAME.sha256" "$uploaded/$GEM_FILENAME.sha256"
+          (cd "$uploaded" && sha256sum --check "$GEM_FILENAME.sha256")
+          gh release edit "$RELEASE_TAG" --draft=false
+          printf 'Published `%s` with SHA-256 checksum.\n' "$GEM_FILENAME" >> "$GITHUB_STEP_SUMMARY"

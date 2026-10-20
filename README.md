@@ -14,26 +14,70 @@ versions have not been verified. The gem requires Ruby >= 2.6.10.
 Runtime dependencies are `optimist` (~> 3.0) and `dimensions` (~> 1.3).
 The verified versions are Optimist 3.2.1 and Dimensions 1.3.0. Both are pure Ruby.
 Development also uses RSpec 3.13 and Rake. Use Bundler 2.4.22 with Ruby 2.6,
-and Bundler 4.0.20 with Ruby 4.0.7. Git is required to build from a checkout,
-because the gemspec obtains its file list from Git.
+and Bundler 4.0.20 with Ruby 4.0.7. The gem contains only runtime Ruby files,
+the executable, this README, and the license; development files are excluded.
 
 Generating `.tex` files does not require a TeX installation. Rendering them does:
 the output uses `overpic`, color, `pict2e`, URL commands, and the existing
 `\sublabel` / `\subref` macros, which the containing document must provide.
 It is not a standalone LaTeX document. PDF compilation has not been verified.
 
-## Install from GitHub on macOS with Homebrew Ruby 4
+## Download a verified GitHub Release
+
+Distribution is through the public [GitHub Releases](https://github.com/misasa/scalebar/releases)
+for `misasa/scalebar`. This project does not publish to RubyGems.org.
+Until the first Release is published, the download script exits with a clear
+error; it does not fall back to an unverified source build.
+
+From this checkout, use the script on macOS or Jenkins with Bash, curl and
+`shasum` available. No `gh` login, GitHub token, Ruby, or gem installation is
+needed to download. The default selects GitHub's latest stable Release; drafts
+and prereleases are not selected.
+
+```sh
+# Download only, into a new directory of your choice.
+bash script/download_release.sh --output-dir ./downloads
+
+# Pin a stable version (an optional v prefix is accepted).
+bash script/download_release.sh --version 1.1.1 --output-dir ./downloads-1.1.1
+```
+
+The script downloads `scalebar-VERSION.gem` and
+`scalebar-VERSION.gem.sha256`, checks the SHA-256 and manifest filename, then
+saves the verified files. It refuses existing files, including symlinks; use a
+fresh output directory when repeating a download. All failures return a nonzero
+exit status. Files are fetched from URLs of this form:
+
+```text
+https://github.com/misasa/scalebar/releases/download/vVERSION/scalebar-VERSION.gem
+https://github.com/misasa/scalebar/releases/download/vVERSION/scalebar-VERSION.gem.sha256
+```
+
+For optional copying to the university Web server, set the destination in the
+environment and explicitly supply `--deploy`:
+
+```sh
+export SCALEBAR_DEPLOY_DEST='user@server.example.edu:/absolute/web/path'
+bash script/download_release.sh --version 1.1.1 --output-dir ./transfer-1.1.1 --deploy
+```
+
+Replace the example destination with the real server. The parent directory must
+already exist. SSH authentication and a known host key must already be set up
+for noninteractive `ssh` and `scp`. A simple `user@host:/absolute/path` is
+supported (no spaces, shell syntax, IPv6 literals, or custom port syntax; use
+an SSH config host alias for a custom port). A new `v1.1.1` directory is created
+atomically below the destination, and both verified files are copied there.
+An existing version directory stops deployment before `scp`; it is never reused.
+A failed transfer can leave a partial directory. Inspect and explicitly remove
+it before retrying with a fresh local output directory. The script does not
+configure the Web server or a gem index.
+
+## Install a downloaded gem on macOS with Homebrew Ruby 4
 
 These commands assume Ruby 4 is already installed at
-`/opt/homebrew/opt/ruby/bin/ruby`. They do not install or upgrade Ruby, edit shell
-startup files, or change your global PATH. They use a dedicated gem directory,
-separate from system Ruby 2.6 and other Ruby installations. No `sudo` is needed.
-
-The parentheses create a temporary shell environment. Check the printed Ruby
-path and version before using the installation. The default checkout location is
-`$HOME/src/scalebar`; it must not already exist. If you already have a checkout,
-use the rebuild instructions below instead. You can set `SCALEBAR_CHECKOUT` and
-`SCALEBAR_GEM_HOME` to choose different directories.
+`/opt/homebrew/opt/ruby/bin/ruby`. They use a dedicated gem directory without
+changing system Ruby or shell startup files. Replace the filename with the
+version you downloaded and verified above.
 
 ```sh
 (
@@ -43,27 +87,22 @@ use the rebuild instructions below instead. You can set `SCALEBAR_CHECKOUT` and
   export GEM_PATH="$GEM_HOME"
   command -v ruby
   ruby -v
-  checkout="${SCALEBAR_CHECKOUT:-$HOME/src/scalebar}"
-  mkdir -p "$(dirname "$checkout")"
-  git clone https://github.com/misasa/scalebar.git "$checkout"
-  cd "$checkout"
-  gem build scalebar.gemspec
-  version="$(ruby -Ilib -rscalebar/version -e 'puts Scalebar::VERSION')"
-  gem install --no-document "./scalebar-$version.gem"
+  gem install --no-document ./downloads/scalebar-1.1.1.gem
   "$GEM_HOME/bin/image-scalebar" --help
 )
 ```
 
-This installs the source from GitHub's default branch, including its runtime
-dependencies. Pending local changes are available there only after they have
-been reviewed and merged. This maintenance update prepares version **1.1.1**;
-it preserves the existing API and rendering behavior. The installation commands
-read the package version from the checkout, so they also work before the update
-is merged. Tagging and publication are deferred until after PR merge and a
-successful CI run.
-Do not add the former HTTP gem server to your RubyGems sources.
+Runtime dependencies may be fetched from RubyGems.org during installation; the
+`scalebar` gem itself comes from the verified Release file. Do not add the former
+HTTP gem server to your RubyGems sources. To update, download another Release
+into a fresh directory and install its local gem using the same environment.
+`gem update scalebar` does not download GitHub Releases. Installing a newer
+version retains older versions; reinstalling the same version replaces its
+installed files.
 
-To run the installed command later, select the same environment explicitly:
+To run the installed command later, select the same environment and replace
+`--help` with the image path and options below. Check the interpreter again
+when Homebrew upgrades Ruby; this gem directory is intended for Ruby 4.0.
 
 ```sh
 (
@@ -71,37 +110,6 @@ To run the installed command later, select the same environment explicitly:
   export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
   export GEM_HOME="${SCALEBAR_GEM_HOME:-$HOME/.local/share/scalebar/ruby-4.0}"
   export GEM_PATH="$GEM_HOME"
-  "$GEM_HOME/bin/image-scalebar" --help
-)
-```
-
-Replace `--help` with the image path and options from the examples below. The
-executable is outside your default PATH unless you choose to add it yourself.
-Homebrew may change its Ruby installation when upgraded: check the interpreter
-again and rebuild the dedicated installation when moving to a different Ruby
-minor version. This directory is intended for Ruby 4.0.
-
-### Update or reinstall a local installation
-
-`gem update scalebar` does not retrieve source changes from GitHub. To install
-new source, update a clean checkout, rebuild the package, and reinstall it using
-the same Ruby and gem directory. Reinstalling the same gem version replaces the
-installed files. If you have uncommitted changes or use a review branch, inspect
-them before updating; omit `git pull` when installing your current local changes.
-Installing 1.1.1 alongside 1.1.0 retains the older gem; the executable normally
-selects the newest installed version. The uninstall command below removes both.
-
-```sh
-(
-  set -eu
-  export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
-  export GEM_HOME="${SCALEBAR_GEM_HOME:-$HOME/.local/share/scalebar/ruby-4.0}"
-  export GEM_PATH="$GEM_HOME"
-  cd "${SCALEBAR_CHECKOUT:-$HOME/src/scalebar}"
-  git pull --ff-only
-  gem build scalebar.gemspec
-  version="$(ruby -Ilib -rscalebar/version -e 'puts Scalebar::VERSION')"
-  gem install --no-document "./scalebar-$version.gem"
   "$GEM_HOME/bin/image-scalebar" --help
 )
 ```
@@ -213,16 +221,44 @@ The old macOS RubyGems may print a compatibility warning when starting Bundler
 
 GitHub Actions is configured to run both exact Ruby versions on Ubuntu 24.04
 using `actions/checkout@v6` and `ruby/setup-ruby@v1`, with a compatible Bundler and
-RubyGems for each Ruby. The workflow runs `rake verify` and a strict gem build.
+RubyGems for each Ruby. Ordinary master pushes and PRs run only the tests.
+Tag pushes also run the tests, then build and verify the release gem only after
+both Ruby jobs succeed.
 A local macOS pass does not establish that the hosted workflow has passed;
 check the actual Actions run after the branch is pushed with approval.
 See [DEVELOPMENT.md](DEVELOPMENT.md) for test rationale, the original test audit,
 CI constraints, and deferred behavior issues.
 
+## Publishing a Release (maintainers)
+
+1. Review and merge the changes into `master`, then confirm the actual Actions
+   tests pass on Ruby 2.6.10 and 4.0.7. Local tests alone do not verify hosted CI.
+2. Choose an unused stable three-part version in `lib/scalebar/version.rb` and
+   merge it into master. Check remote tags and Releases, including drafts, for
+   both `VERSION` and `vVERSION`. At migration time the existing tags were
+   `1.0.5` and `1.1.0`, no public Releases existed, and the source version was
+   `1.1.1`; recheck before publishing.
+3. Create an annotated `vVERSION` tag on the intended master commit and push
+   that tag. For the current source version this would be `v1.1.1`. Creating or
+   pushing a tag is an explicit release action; ordinary master pushes and PRs
+   never create a Release.
+4. Check the tag workflow. Both test jobs must pass. The release job checks tag,
+   event commit, master ancestry, gemspec version, archive filename, existing
+   tags and Releases, then performs a strict build and isolated installed-CLI
+   verification. Only this job receives `contents: write`.
+5. The job uploads the gem and its SHA-256 file to a draft, downloads both again
+   and verifies their bytes before publishing. It never overwrites an existing
+   Release or asset. If upload/verification fails, a draft may remain unpublished;
+   inspect it and resolve it explicitly before rerunning. A successful release
+   cannot be republished by rerunning its job.
+6. Confirm both assets can be downloaded without authentication using
+   `script/download_release.sh`. University server copying is a separate,
+   explicitly requested `--deploy` operation.
+
+The workflow does not publish to RubyGems.org and does not create tags. Keep the
+repository public so Mac and Jenkins downloads can remain unauthenticated.
+
 ## License
 
-GPL-3.0-or-later. See [LICENSE.txt](LICENSE.txt), which retains the existing
-Okayama University copyright notice and includes the GPL version 3 text.
-The CLI retains its existing copyright notice. The gemspec now matches the
-GPLv3-or-later license selected in the repository in 2017; this maintenance work
-does not introduce a new license choice.
+GPL-3.0-or-later. See [LICENSE.txt](LICENSE.txt) for the copyright notice and
+full GNU General Public License version 3 text.

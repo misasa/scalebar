@@ -18,7 +18,7 @@ raise 'Package version differs from source' unless package.spec.version.to_s == 
 files = package.contents
 required = %w[bin/image-scalebar lib/scalebar.rb lib/scalebar/scalebar.rb lib/scalebar/version.rb README.md LICENSE.txt]
 raise "Missing packaged files: #{required - files}" unless (required - files).empty?
-forbidden = files.grep(%r{(?:\A|/)(?:\.git|\.bundle|vendor|pkg|tmp)(?:/|\z)|\.gem\z|(?:\A|/)Gemfile\.lock\z})
+forbidden = files.reject { |file| required.include?(file) || file.match?(%r{\Alib/.+\.rb\z}) }
 raise "Unexpected packaged files: #{forbidden}" unless forbidden.empty?
 raise 'Wrong license metadata' unless package.spec.licenses == ['GPL-3.0-or-later']
 raise 'Missing executable metadata' unless package.spec.executables.include?('image-scalebar')

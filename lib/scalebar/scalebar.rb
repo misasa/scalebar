@@ -306,8 +306,15 @@ EOS
 	    io.puts sprintf('\\begin{overpic}[width=0.49\\textwidth]{%s}', image_file)
 	    io.puts sprintf('  \\put(1,74){\\colorbox{white}{(\\sublabel{%s}) \\nolinkurl{%s}}}', basename, basename)
 	    io.puts '  % ' + sprintf('(\\subref{%s}) \\nolinkurl{%s}', basename, basename)
-	    io.puts sprintf('  \\put(1,3){\\colorbox{white}{\\bf \\Huge \\nolinkurl{%s}}}', basename)
 	    if magnification
+	      label_length, label_unit = if scale_length_on_stage >= 1000
+	        [scale_length_on_stage / 1000.0, 'mm']
+	      elsif scale_length_on_stage < 1
+	        [scale_length_on_stage * 1000, 'nm']
+	      else
+	        [scale_length_on_stage, '\\textmu{}m']
+	      end
+	      io.puts sprintf('  \\put(1,3){\\colorbox{white}{\\bf \\Huge %g %s}}', label_length, label_unit)
 	  # io.puts '  \\color{red}'
 	      io.puts '  \\color{white}'
 	      io.puts sprintf("  \\linethickness{4pt}")

@@ -75,6 +75,31 @@ RSpec.describe 'image-scalebar CLI' do
   end
 
   describe 'LaTeX scale and grid values', :specification do
+    [
+      ['0.0006', '100 nm'],
+      ['0.006', '1 \\textmu{}m'],
+      ['0.06', '10 \\textmu{}m'],
+      ['0.6', '100 \\textmu{}m'],
+      ['6', '1 mm'],
+      ['60', '10 mm']
+    ].each do |width_mm, label|
+      it "labels the scale bar as #{label} for a #{width_mm} mm field" do
+        prepare_image
+        _, _, status = run_cli("--width=#{width_mm}", image_path)
+        expect(status.exitstatus).to eq(0)
+        tex = File.read(tex_path)
+        expect(tex).to include("\\put(1,3){\\colorbox{white}{\\bf \\Huge #{label}}}")
+        expect(tex).not_to include('\\put(1,3){\\colorbox{white}{\\bf \\Huge \\nolinkurl')
+      end
+    end
+
+    it 'omits the scale label when no calibration is available' do
+      prepare_image
+      _, _, status = run_cli(image_path)
+      expect(status.exitstatus).to eq(0)
+      expect(File.read(tex_path)).not_to include('\\put(1,3)')
+    end
+
     it 'writes a 10,000 um bar as 16.7 percent of a 60 mm landscape field' do
       prepare_image
       _, _, status = run_cli('--width=60', image_path)

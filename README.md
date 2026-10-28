@@ -7,9 +7,11 @@ The command is `image-scalebar`; its output is a `.tex` fragment beside the imag
 
 ## Compatibility and dependencies
 
-The maintenance checks target **Ruby 2.6.10 and Ruby 4.0.7**. Ruby 2.6 is
-end-of-life; compatibility is retained for existing installations. Other Ruby
-versions have not been verified. The gem requires Ruby >= 2.6.10.
+The gem allows installation on **Ruby >= 2.6.0**. The maintenance CI targets
+**Ruby 2.6.10 and Ruby 4.0.7**; local checks of the 1.1.2 compatibility correction
+passed on macOS Ruby 2.6.10 and Ruby 4.0.9. Ruby 2.6.0 itself has not been tested.
+The installation requirement is distinct from the versions used for testing.
+Ruby 2.6 is end-of-life; compatibility is retained for existing installations.
 
 Runtime dependencies are `optimist` (~> 3.0) and `dimensions` (~> 1.3).
 The verified versions are Optimist 3.2.1 and Dimensions 1.3.0. Both are pure Ruby.
@@ -257,6 +259,11 @@ CI constraints, and deferred behavior issues.
 
 The workflow does not publish to RubyGems.org and does not create tags. Keep the
 repository public so Mac and Jenkins downloads can remain unauthenticated.
+
+For the same-version 1.1.2 Ruby requirement correction, see the
+[replacement investigation in DEVELOPMENT.md](DEVELOPMENT.md#same-version-112-distribution-investigation).
+The ordinary release workflow refuses replacement of existing Releases/assets.
+Rebuilding locally does not update a published gem or an existing installation.
 
 ## License
 

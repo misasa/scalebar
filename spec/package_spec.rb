@@ -3,11 +3,18 @@ require 'spec_helper'
 RSpec.describe 'gem metadata' do
   subject(:specification) { Gem::Specification.load(File.expand_path('../scalebar.gemspec', __dir__)) }
 
-  it 'declares the verified Ruby floor while admitting both compatibility targets' do
-    requirement = specification.required_ruby_version
-    expect(requirement.satisfied_by?(Gem::Version.new('2.6.10'))).to be(true)
-    expect(requirement.satisfied_by?(Gem::Version.new('4.0.7'))).to be(true)
-    expect(requirement.satisfied_by?(Gem::Version.new('2.5.9'))).to be(false)
+  {
+    '2.5.9' => false,
+    '2.6.0' => true,
+    '2.6.1' => true,
+    '2.6.6' => true,
+    '2.6.10' => true,
+    '4.0.7' => true
+  }.each do |version, allowed|
+    it "#{allowed ? 'allows' : 'excludes'} installation on Ruby #{version}" do
+      requirement = specification.required_ruby_version
+      expect(requirement.satisfied_by?(Gem::Version.new(version))).to be(allowed)
+    end
   end
 
   it 'identifies the source repository and the existing GPL license' do

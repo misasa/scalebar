@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
   spec.description   = "Generate LaTeX image overlays using JEOL JSM-7001F metadata or an explicit field width or magnification."
   spec.homepage      = "https://github.com/misasa/scalebar"
   spec.license       = "GPL-3.0-or-later"
-  spec.required_ruby_version = ">= 2.6.10"
+  spec.required_ruby_version = '>= 2.6.0'
 
   spec.files         = %w[LICENSE.txt README.md bin/image-scalebar] + Dir['lib/**/*.rb'].sort
   spec.executables   = ['image-scalebar']

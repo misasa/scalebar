@@ -1,5 +1,140 @@
 # Development and regression testing
 
+## Ruby requirement correction for 1.1.2
+
+The installation requirement is `Ruby >= 2.6.0`; the version remains 1.1.2.
+The former `>= 2.6.10` confused the tested interpreter with the installation
+floor. The metadata examples now independently check exclusion of 2.5.9 and
+admission of 2.6.0, 2.6.1, 2.6.6, 2.6.10 and 4.0.7. Before the correction,
+the 2.6.0, 2.6.1 and 2.6.6 examples failed as expected.
+
+On 2026-10-29, macOS Ruby 2.6.10 and Homebrew Ruby 4.0.9 each passed
+`bundle exec rake verify`: **87 examples, 0 failures**, followed by archive
+validation, isolated installation, help, all six baseline LaTeX outputs and
+existing-output protection. Separate working copies and gem directories under
+ignored `pkg/compatibility-1.1.2` avoided sharing lockfiles or changing user gems.
+Ruby 2.6 used Bundler 2.4.22 / Rake 12.3.3; Ruby 4 used its available Bundler
+4.0.23 / Rake 13.3.1. RSpec was 3.13.2, Optimist 3.2.1 and Dimensions 1.3.0
+in both environments. The existing macOS RubyGems 3.0.3.1 warning about Bundler
+version selection remains; the system RubyGems installation was not changed.
+
+Both interpreters also passed `gem build scalebar.gemspec --strict`.
+The archives were checked for version 1.1.2, requirement `>= 2.6.0`, all six
+Ruby admission cases and unchanged runtime dependency constraints. The final
+`pkg/scalebar-1.1.2.gem` was checked with `script/verify_package.rb` under both
+interpreters; its four `bin/` and `lib/` files are byte-identical to those in
+the previously distributed 1.1.2. Its SHA-256 manifest is beside the archive.
+Different RubyGems builders can produce different archive hashes; distribute
+the verified gem and checksum as one pair.
+
+Ruby 2.6.0 itself was **not executed**. Ruby 4.0.7 was not available locally for
+this correction; the CI matrix remains exactly Ruby 2.6.10 and 4.0.7. No hosted
+CI run is claimed for these unpushed changes, and no Windows job was added.
+
+### Dependency and implementation audit
+
+The installed gemspecs of Optimist 3.2.1 and Dimensions 1.3.0 both report
+`required_ruby_version >= 0`, no runtime gem dependencies and no native
+extensions. Their packaged runtime sources and scalebar's sources were reviewed
+and all 14 files compiled with Ruby 2.6.10. No requirement for Ruby 2.6.1 or
+later was identified. This is a source/metadata audit, not a Ruby 2.6.0 runtime
+certification or a guarantee about future versions permitted by `~> 3.0`.
+
+Optimist uses standard `date`, optional `io/console` for terminal width, keyword
+arguments and `String#match?`, all available in Ruby 2.6.0. Unknown-option
+suggestions check for the relevant `DidYouMean` constants before use. Its
+optional Chronic date parser is not used by scalebar's float options and is
+not an installation dependency. Dimensions uses ordinary binary IO, string
+slicing and `unpack` for image headers. Scalebar uses those APIs plus existing
+numeric, regexp, file and time operations; no newer syntax/API requirement was
+found. No runtime dependency update or implementation change was needed.
+Bundler 2.4.22 declares Ruby >= 2.6.0; the selected Ruby 2.6 development gems
+also admit 2.6.0. Bundler 4 remains the separate Ruby 4 toolchain.
+
+References: [Optimist metadata](https://rubygems.org/gems/optimist/versions/3.2.1),
+[Dimensions metadata](https://rubygems.org/gems/dimensions/versions/1.3.0),
+[Ruby 2.6.0 String API](https://docs.ruby-lang.org/en/2.6.0/String.html).
+
+## Same-version 1.1.2 distribution investigation
+
+Read-only checks on 2026-10-29 found the published
+[v1.1.2 Release](https://github.com/misasa/scalebar/releases/tag/v1.1.2)
+with `immutable: false`. Its gem asset's SHA-256 is
+`3ff73124884b454c0344fe0f898b9ca32ad27de2bef50e8133307f618828dd23`.
+The [university gem](https://dream.misasa.okayama-u.ac.jp/rubygems/gems/scalebar-1.1.2.gem)
+has the same hash. Its archive and
+[quick gemspec](https://dream.misasa.okayama-u.ac.jp/rubygems/quick/Marshal.4.8/scalebar-1.1.2.gemspec.rz)
+both require Ruby >= 2.6.10; the public `specs.4.8.gz` includes 1.1.2.
+Both HTTP and HTTPS index reads succeeded, although an HTTPS directory request
+returned 403. Directory listing failure therefore does not establish that the
+repository is unavailable. Server-side software, filesystem paths, write access
+and overwrite policy could not be established from these public reads.
+
+No Release, tag, server file or server index was changed. The following is a
+future maintainer procedure, not an action performed by this correction.
+
+### GitHub Releases
+
+After separate authorization, back up both existing assets and their hashes,
+confirm the corrected source revision and local checks, and recheck the
+Release's immutability and write permissions. For a mutable Release,
+`gh release upload v1.1.2 pkg/scalebar-1.1.2.gem pkg/scalebar-1.1.2.gem.sha256 --repo misasa/scalebar --clobber`
+can replace both assets without moving the tag. `--clobber` deletes an old
+asset before uploading its replacement; a failed upload can lose that asset,
+and the two-file replacement is not atomic. Coordinate a download pause or
+maintenance window, retain rollback copies, then download both into a fresh
+directory and verify the checksum and embedded Ruby requirement.
+
+Keep the tag fixed and record the correction's source commit and old/new hashes
+in the Release notes: the tag's autogenerated source archives still represent
+the original source. The existing CI release job and `verify_release.rb`
+deliberately refuse existing Releases/assets; rerunning them is not a replacement
+mechanism. If the Release becomes immutable, its assets cannot be replaced;
+this same-Release procedure is unavailable. See
+[GitHub asset upload](https://cli.github.com/manual/gh_release_upload) and
+[immutable Releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
+
+### University gem repository and caches
+
+The public layout is consistent with a static RubyGems repository. If confirmed
+by its administrator, back up the repository, stage a replacement of
+`gems/scalebar-1.1.2.gem`, fully regenerate indexes from **all** retained gems,
+and deploy the gem and indexes together under a maintenance window or an atomic
+repository switch. In particular, refresh
+`quick/Marshal.4.8/scalebar-1.1.2.gemspec.rz`; replacing just the gem leaves the
+old Ruby requirement visible to resolvers. Regenerate `specs.4.8.gz`,
+`latest_specs.4.8.gz` and `prerelease_specs.4.8.gz` as well. If additional
+dependency/compact-index endpoints or checksum manifests are served, rebuild
+them using that server's own supported tooling, too.
+
+A local RubyGems 3.0.3.1 mirror experiment verified that full
+`gem generate_index --directory REPOSITORY_ROOT` produces the corrected quick
+gemspec. `--update` also worked with a fresh gem mtime, but that implementation
+selects files by mtime and can miss a replacement whose timestamp is preserved;
+prefer a full rebuild for this same-version correction. RubyGems 3.0.3.1 needs
+the Builder gem; newer RubyGems moves the command into `rubygems-generate_index`.
+Neither is a scalebar runtime dependency. Consult the
+[index command reference](https://guides.rubygems.org/command-reference/#gem-generate_index).
+The checkout's `download_release.sh --deploy` refuses an existing version
+directory and does not maintain a gem index, so it cannot perform this replacement.
+
+The name/version/platform tuple and download URL stay the same. HTTP proxies,
+mirrors and client gem/quick-spec caches may retain old bytes or the old
+requirement; refresh affected caches and verify the downloaded hash rather
+than relying on a successful version lookup. A lockfile containing an old
+checksum will need a reviewed checksum refresh after the replacement is
+authenticated; do not bypass a checksum mismatch. A version-only lockfile
+cannot distinguish the two archives, and `bundle install` may reuse cached gems.
+
+Existing installations are not automatically changed, and `gem update` has no
+higher version to discover. Download the corrected pair into a fresh directory,
+verify SHA-256, and explicitly reinstall that local gem in the intended Ruby/gem
+environment with `gem install --local --no-document PATH/scalebar-1.1.2.gem`.
+An isolated Ruby 2.6.10 experiment installed the old 1.1.2 then the corrected
+1.1.2 without `--force`, confirming that the installed requirement changed from
+`>= 2.6.10` to `>= 2.6.0`. Restart long-running processes to reload installed code.
+The command behavior and generated LaTeX are unchanged by this correction.
+
 ## Scope and baseline
 
 The maintenance baseline is `192e966` (the merge of PR #2). Before this work,
@@ -106,7 +241,7 @@ purpose. Table-driven rows exercise distinct inputs rather than inflate counts.
 | LaTeX bar values and strokes | Specification | A 10 mm bar in 60 mm spans 16.666... percent, formatted as 16.7. Two strokes use 4pt/2pt; catches wrong geometry or missing strokes |
 | Square-field LaTeX grid | Specification | Synthetic 100 x 100 pixel PNG spans 10 x 10 mm; 1 mm is 10 pixels / 10 percent. Ticks at -5 through +5 mm give nine interior lines; checks both axes, labels and printed coordinates |
 | Missing/corrupt images and nonpositive numeric inputs | Characterization | Calibrated missing/corrupt images, width 0/-1, magnification 0 and pitch 0 fail; uncalibrated missing image currently succeeds. Records boundaries without blessing current diagnostics or partial files |
-| Ruby floor, homepage and license | Packaging contract | Admit 2.6.10 and 4.0.7; exclude 2.5.9; identify the actual repository and existing GPL-3.0-or-later license |
+| Ruby floor, homepage and license | Packaging contract | Admit 2.6.0, 2.6.1, 2.6.6, 2.6.10 and 4.0.7; exclude 2.5.9; identify the actual repository and existing GPL-3.0-or-later license |
 
 The package smoke test (`script/verify_package.rb`) checks the actual archive,
 required runtime files, absence of generated/private build files, executable and
